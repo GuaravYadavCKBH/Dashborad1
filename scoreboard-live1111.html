@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Performance Matrix — Scoreboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0E0E10;
+    --surface:#18181C;
+    --line:#2A2A30;
+    --lime:#D4F33C;
+    --violet:#A78BFA;
+    --cyan:#5EE6E0;
+    --pink:#FF7CA3;
+    --text:#F5F5F2;
+    --dim:#8C8C94;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--bg); color:var(--text); font-family:'Bricolage Grotesque', sans-serif; min-height:100vh;}
+  .app{ max-width:480px; margin:0 auto; min-height:100vh;}
+
+  .header{ padding:20px 18px 12px; position:sticky; top:0; background:var(--bg); z-index:30;}
+  .htop{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+  .htop h1{ font-size:22px; font-weight:800; letter-spacing:-0.02em;}
+  .htop h1 span{ color:var(--lime);}
+  .date-pill{ background:var(--surface); border:1px solid var(--line); border-radius:30px; padding:6px 12px; font-family:'DM Mono',monospace; font-size:10.5px; color:var(--dim); display:flex; align-items:center; gap:6px;}
+  .date-pill .dot{ width:6px; height:6px; border-radius:50%; background:var(--lime); flex-shrink:0;}
+  .date-pill .dot.stale{ background:var(--pink); animation:none;}
+  .date-pill .dot.loading{ background:var(--cyan); animation:blink 0.9s infinite;}
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:0.25;} }
+
+  .filterstrip{ display:flex; gap:8px; margin-bottom:6px;}
+  .fchip{ flex:1; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:9px 11px; cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent;}
+  .fchip label{ display:block; font-family:'DM Mono', monospace; font-size:8.5px; color:var(--dim); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:3px;}
+  .fchip .v{ font-size:13px; font-weight:600; display:flex; justify-content:space-between; align-items:center; gap:4px;}
+  .fchip.live{ border-color:rgba(212,243,60,0.4); background:rgba(212,243,60,0.06);}
+  .fchip.live .v{ color:var(--lime);}
+  .fchip svg{ width:9px; height:9px; opacity:0.5; flex-shrink:0;}
+  .fchip input[type="date"]{
+    background:transparent; border:none; color:var(--text); font-family:'Bricolage Grotesque', sans-serif;
+    font-size:13px; font-weight:600; width:100%; padding:0; -webkit-appearance:none;
+  }
+  .fchip input[type="date"]::-webkit-calendar-picker-indicator{ filter:invert(0.6); cursor:pointer;}
+
+  .preset-row{ display:flex; gap:6px; margin-top:10px; overflow-x:auto; scrollbar-width:none;}
+  .preset-row::-webkit-scrollbar{display:none;}
+  .preset-pill{
+    flex-shrink:0; font-family:'DM Mono', monospace; font-size:10.5px;
+    padding:7px 13px; border-radius:20px; border:1px solid var(--line);
+    background:var(--surface); color:var(--dim); white-space:nowrap;
+    cursor:pointer; user-select:none; -webkit-tap-highlight-color:transparent;
+    transition:background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .preset-pill.active{ background:var(--lime); color:#10100A; border-color:var(--lime); font-weight:700;}
+
+  select.platform-select{
+    appearance:none; -webkit-appearance:none; background:transparent; border:none;
+    color:var(--lime); font-family:'Bricolage Grotesque', sans-serif; font-size:13px;
+    font-weight:600; width:100%; cursor:pointer;
+  }
+  select.platform-select option{ background:var(--surface); color:var(--text);}
+
+  .scoretape{ display:flex; padding:18px 18px 8px; gap:10px; overflow-x:auto; scrollbar-width:none;}
+  .scoretape::-webkit-scrollbar{display:none;}
+  .stat-big{ flex-shrink:0; min-width:118px; background:var(--surface); border-radius:18px; padding:14px 14px 12px; border:1px solid var(--line);}
+  .stat-big .num{ font-size:21px; font-weight:800; letter-spacing:-0.02em;}
+  .stat-big .lbl{ font-size:10px; color:var(--dim); margin-top:4px;}
+  .stat-big.lime .num{ color:var(--lime);}
+  .stat-big.violet .num{ color:var(--violet);}
+  .stat-big.cyan .num{ color:var(--cyan);}
+
+  .deck-label{ padding:20px 18px 10px; display:flex; justify-content:space-between; align-items:baseline;}
+  .deck-label h2{ font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;}
+  .deck-label .hint{ font-family:'DM Mono', monospace; font-size:10px; color:var(--dim);}
+
+  .deck{ display:flex; gap:14px; padding:0 18px 28px; overflow-x:auto; scroll-snap-type:x mandatory; scrollbar-width:none;}
+  .deck::-webkit-scrollbar{display:none;}
+
+  .score-card{
+    scroll-snap-align:start; flex-shrink:0; width:268px;
+    background:var(--surface); border-radius:22px; border:1px solid var(--line);
+    padding:18px; position:relative;
+  }
+  .sc-top{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;}
+  .sc-name{ font-size:18px; font-weight:800;}
+  .sc-budget{ font-family:'DM Mono', monospace; font-size:10px; color:var(--dim); margin-top:3px;}
+  .sc-ring{
+    width:46px; height:46px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    font-family:'DM Mono', monospace; font-size:10px; font-weight:600;
+    border:3px solid; position:relative;
+  }
+
+  .sc-big-num{ font-size:38px; font-weight:800; letter-spacing:-0.03em; line-height:1; margin-bottom:2px;}
+  .sc-big-lbl{ font-family:'DM Mono', monospace; font-size:10px; color:var(--dim); margin-bottom:16px;}
+
+  .sc-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;}
+  .sc-stat{ background:rgba(255,255,255,0.03); border-radius:10px; padding:9px 10px;}
+  .sc-stat .v{ font-size:14px; font-weight:700;}
+  .sc-stat .l{ font-size:9px; color:var(--dim); margin-top:2px;}
+
+  .sc-bar-row{ margin-bottom:8px;}
+  .sc-bar-top{ display:flex; justify-content:space-between; font-size:10px; color:var(--dim); margin-bottom:4px; font-family:'DM Mono',monospace;}
+  .sc-bar{ height:6px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden;}
+  .sc-bar-fill{ height:100%; border-radius:4px; transition:width 0.4s ease;}
+
+  .footnote{ text-align:center; padding:10px 18px 8px; font-family:'DM Mono', monospace; font-size:9.5px; color:var(--dim);}
+  .footnote.err{ color:var(--pink);}
+
+  .skeleton{ background:linear-gradient(90deg, var(--surface) 25%, #222226 37%, var(--surface) 63%); background-size:400% 100%; animation:shimmer 1.4s infinite; border-radius:10px;}
+  @keyframes shimmer{ 0%{background-position:100% 50%;} 100%{background-position:0 50%;} }
+  .deck.loading .score-card{ opacity:0.35; pointer-events:none;}
+
+  .config-banner{
+    margin:14px 18px 0; padding:12px 14px; background:rgba(255,124,163,0.08);
+    border:1px solid rgba(255,124,163,0.3); border-radius:12px; font-size:11.5px;
+    color:var(--pink); line-height:1.5;
+  }
+  .config-banner code{ background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px; font-family:'DM Mono', monospace; font-size:10.5px;}
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--surface); border:1px solid var(--line); border-radius:30px;
+    padding:10px 18px; font-size:12px; font-family:'DM Mono', monospace; color:var(--text);
+    opacity:0; transition:opacity 0.25s, transform 0.25s; z-index:50; white-space:nowrap;
+    box-shadow:0 8px 24px rgba(0,0,0,0.4);
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div class="htop">
+      <h1>Score<span>board</span></h1>
+      <div class="date-pill" id="syncPill"><span class="dot loading" id="syncDot"></span><span id="syncLabel">Loading…</span></div>
+    </div>
+    <div class="filterstrip">
+      <div class="fchip" id="startChip">
+        <label>Start</label>
+        <input type="date" id="startInput">
+      </div>
+      <div class="fchip" id="endChip">
+        <label>End</label>
+        <input type="date" id="endInput">
+      </div>
+      <div class="fchip live">
+        <label>Platform</label>
+        <select class="platform-select" id="platformSelect">
+          <option value="All">All</option>
+          <option value="Meta">Meta</option>
+          <option value="Google">Google</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="preset-row" id="presetRow">
+      <div class="preset-pill active" data-preset="yesterday">Yesterday</div>
+      <div class="preset-pill" data-preset="last3">Last 3 days</div>
+      <div class="preset-pill" data-preset="last7">Last 7 days</div>
+      <div class="preset-pill" data-preset="thismonth">This month</div>
+      <div class="preset-pill" data-preset="custom">Custom</div>
+    </div>
+  </div>
+
+  <div class="config-banner" id="configBanner" style="display:none;">
+    No Web App URL configured yet. Open this file and set <code>WEB_APP_URL</code>
+    near the bottom of the script to your deployed Apps Script URL, then reload.
+    Showing sample data below in the meantime.
+  </div>
+
+  <div class="scoretape" id="scoretape">
+    <div class="stat-big lime"><div class="num" id="totBudget">—</div><div class="lbl">Total budget</div></div>
+    <div class="stat-big violet"><div class="num" id="totCost">—</div><div class="lbl">Total cost</div></div>
+    <div class="stat-big cyan"><div class="num" id="totTarget">—</div><div class="lbl">Leads target</div></div>
+    <div class="stat-big lime"><div class="num" id="totLeads">—</div><div class="lbl">Leads so far</div></div>
+  </div>
+
+  <div class="deck-label">
+    <h2>Account types</h2>
+    <div class="hint">swipe →</div>
+  </div>
+
+  <div class="deck" id="deck">
+    <!-- cards rendered by JS -->
+  </div>
+
+  <div class="footnote" id="footnote">Connecting to Google Sheets…</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   CONFIG — paste your deployed Apps Script Web App URL here
+   ===================================================================== */
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw43fk2ZnHqneae_mv23p0tXYNJlckhz-2rVtxQlI5BuVwtkDPO1H3B_AklN8rWDw8uww/exec';
+
+/* =====================================================================
+   SAMPLE DATA — used only if WEB_APP_URL is empty, so this file still
+   previews correctly before you've deployed anything.
+   ===================================================================== */
+const SAMPLE_RESPONSE = {
+  success: true,
+  fetchedAt: new Date().toISOString(),
+  filters: { startDate: '2026-06-25', endDate: '2026-06-25', platform: 'All' },
+  totals: {
+    budget: 5843147, cost: 102128, spentPct: 0.0175, leadsTarget: 10947,
+    leads: 289, cpl: 353
+  },
+  accounts: [
+    { accountType:'ARMC', accountBudget:541753, cost:5618, spentPct:0.0104, leadsTarget:984, leads:15, leadPct:0.0152, cpl:375, invalidLeads:8, invalidRatio:0.5333, transactionalLeads:2, transactionalLeadsPct:0.1333, appt:0, rnrChurn:4, rnrChurnPct:0.2667 },
+    { accountType:'BFI', accountBudget:4769819, cost:88069, spentPct:0.0185, leadsTarget:8980, leads:240, leadPct:0.0246, cpl:367, invalidLeads:57, invalidRatio:0.2579, transactionalLeads:31, transactionalLeadsPct:0.1403, appt:8, rnrChurn:119, rnrChurnPct:0.4958 },
+    { accountType:'BS KA', accountBudget:234345, cost:4655, spentPct:0.0199, leadsTarget:448, leads:18, leadPct:0.0357, cpl:259, invalidLeads:4, invalidRatio:0.25, transactionalLeads:4, transactionalLeadsPct:0.25, appt:2, rnrChurn:2, rnrChurnPct:0.1111 },
+    { accountType:'BS Non-KA', accountBudget:297230, cost:3786, spentPct:0.0127, leadsTarget:535, leads:16, leadPct:0.028, cpl:237, invalidLeads:1, invalidRatio:0.0667, transactionalLeads:2, transactionalLeadsPct:0.1333, appt:0, rnrChurn:6, rnrChurnPct:0.375 }
+  ]
+};
+
+const ACCENTS = ['#FF7CA3', '#D4F33C', '#5EE6E0', '#A78BFA'];
+
+/* ---------- date helpers ---------- */
+// IMPORTANT: use LOCAL date parts, not toISOString() (which converts to UTC
+// and can silently shift the date back by one day depending on time of day).
+function toISO(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function daysAgo(n){ const d = new Date(); d.setDate(d.getDate() - n); return d; }
+
+function presetRange(preset){
+  // "Yesterday" is the most recent complete day — every range below is
+  // anchored to yesterday, not today, since today's data isn't final yet.
+  const yest = daysAgo(1);
+  switch(preset){
+    case 'yesterday': return { start: toISO(yest), end: toISO(yest) };
+    case 'last3':     return { start: toISO(daysAgo(3)), end: toISO(yest) };   // 3 complete days ending yesterday
+    case 'last7':     return { start: toISO(daysAgo(7)), end: toISO(yest) };   // 7 complete days ending yesterday
+    case 'thismonth': { const first = new Date(yest.getFullYear(), yest.getMonth(), 1); return { start: toISO(first), end: toISO(yest) }; }
+    default:          return null; // custom — use whatever is in the inputs
+  }
+}
+
+/* ---------- formatting helpers ---------- */
+function fmtINR(n){
+  if (n == null || isNaN(n)) return '—';
+  if (n >= 100000) return '₹' + (n/100000).toFixed(2).replace(/\.00$/,'') + 'L';
+  if (n >= 1000) return '₹' + (n/1000).toFixed(1).replace(/\.0$/,'') + 'k';
+  return '₹' + Math.round(n).toLocaleString('en-IN');
+}
+function fmtNum(n){ return n == null || isNaN(n) ? '—' : Number(n).toLocaleString('en-IN'); }
+function fmtPct(n){ return n == null || isNaN(n) ? '—' : (n*100).toFixed(2) + '%'; }
+function clampPct(n){ return Math.max(0, Math.min(100, (n||0)*100)); }
+
+/* ---------- state ---------- */
+const _initRange = (() => {
+  const d = daysAgo(1); // most recent complete day, in local time
+  const iso = toISO(d);
+  return { start: iso, end: iso };
+})();
+let state = {
+  start: _initRange.start,
+  end: _initRange.end,
+  platform: 'All',
+  preset: 'yesterday',
+  loading: false
+};
+
+/* ---------- DOM refs ---------- */
+const startInput = document.getElementById('startInput');
+const endInput = document.getElementById('endInput');
+const platformSelect = document.getElementById('platformSelect');
+const presetRow = document.getElementById('presetRow');
+const deck = document.getElementById('deck');
+const footnote = document.getElementById('footnote');
+const syncDot = document.getElementById('syncDot');
+const syncLabel = document.getElementById('syncLabel');
+const configBanner = document.getElementById('configBanner');
+const toast = document.getElementById('toast');
+
+startInput.value = state.start;
+endInput.value = state.end;
+if (!WEB_APP_URL) configBanner.style.display = 'block';
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+/* ---------- rendering ---------- */
+function renderTotals(totals){
+  document.getElementById('totBudget').textContent = fmtINR(totals.budget);
+  document.getElementById('totCost').textContent = fmtINR(totals.cost);
+  document.getElementById('totTarget').textContent = fmtNum(totals.leadsTarget);
+  document.getElementById('totLeads').textContent = fmtNum(totals.leads);
+}
+
+function renderCards(accounts){
+  deck.innerHTML = accounts.map((a, i) => {
+    const accent = ACCENTS[i % ACCENTS.length];
+    const invalidPct = clampPct(a.invalidRatio);
+    const rnrPct = clampPct(a.rnrChurnPct);
+    return `
+      <div class="score-card">
+        <div class="sc-top">
+          <div>
+            <div class="sc-name">${a.accountType}</div>
+            <div class="sc-budget">${fmtINR(a.accountBudget)} · ${fmtPct(a.spentPct)} spent</div>
+          </div>
+          <div class="sc-ring" style="border-color:${accent}; color:${accent};">${Math.round(invalidPct)}%</div>
+        </div>
+        <div class="sc-big-num">${fmtNum(a.leads)}</div>
+        <div class="sc-big-lbl">leads · target ${fmtNum(a.leadsTarget)} (${fmtPct(a.leadPct)})</div>
+        <div class="sc-grid">
+          <div class="sc-stat"><div class="v">${fmtINR(a.cpl)}</div><div class="l">CPL</div></div>
+          <div class="sc-stat"><div class="v">${fmtINR(a.cost)}</div><div class="l">Cost</div></div>
+          <div class="sc-stat"><div class="v">${fmtPct(a.transactionalLeadsPct)}</div><div class="l">Trans%</div></div>
+          <div class="sc-stat"><div class="v">${fmtNum(a.transactionalLeads)}/${fmtNum(a.appt)}</div><div class="l">Tran/App</div></div>
+        </div>
+        <div class="sc-bar-row">
+          <div class="sc-bar-top"><span>Invalid ratio</span><span>${fmtPct(a.invalidRatio)}</span></div>
+          <div class="sc-bar"><div class="sc-bar-fill" style="width:${invalidPct}%; background:${accent};"></div></div>
+        </div>
+        <div class="sc-bar-row">
+          <div class="sc-bar-top"><span>RnR + Churn</span><span>${fmtPct(a.rnrChurnPct)}</span></div>
+          <div class="sc-bar"><div class="sc-bar-fill" style="width:${rnrPct}%; background:${accent};"></div></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function setSyncStatus(mode, label){
+  syncDot.className = 'dot' + (mode === 'loading' ? ' loading' : mode === 'stale' ? ' stale' : '');
+  syncLabel.textContent = label;
+}
+
+/* ---------- data fetch ---------- */
+async function fetchData(){
+  if (state.loading) return;
+  state.loading = true;
+  deck.classList.add('loading');
+  setSyncStatus('loading', 'Syncing…');
+  footnote.textContent = 'Fetching latest numbers from Google Sheets…';
+  footnote.classList.remove('err');
+
+  try {
+    let data;
+    if (!WEB_APP_URL) {
+      await new Promise(r => setTimeout(r, 500));
+      data = SAMPLE_RESPONSE;
+    } else {
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight on Apps Script
+        body: JSON.stringify({ startDate: state.start, endDate: state.end, platform: state.platform })
+      });
+      if (!res.ok) throw new Error('Server responded with ' + res.status);
+      data = await res.json();
+      if (data.error) throw new Error(data.error);
+    }
+
+    if (!data.success) throw new Error(data.error || 'Sheet returned an unexpected response.');
+
+    renderTotals(data.totals || {});
+    const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+    if (accounts.length === 0) {
+      deck.innerHTML = '<div style="padding:30px 8px; color:var(--dim); font-size:13px; text-align:center; width:100%;">No account rows came back for this filter. Check Code.gs row range (DATA_START_ROW/DATA_END_ROW) matches your sheet.</div>';
+    } else {
+      renderCards(accounts);
+    }
+    setSyncStatus('live', 'Live');
+    const stamp = new Date(data.fetchedAt || Date.now());
+    footnote.textContent = '● Synced ' + stamp.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }) + ' · ' + state.start + (state.end !== state.start ? ' → ' + state.end : '') + ' · ' + state.platform;
+  } catch (err) {
+    setSyncStatus('stale', 'Sync failed');
+    footnote.textContent = 'Could not reach the sheet — showing last known data. (' + err.message + ')';
+    footnote.classList.add('err');
+    showToast('Sync failed — check Web App URL / deployment');
+  } finally {
+    state.loading = false;
+    deck.classList.remove('loading');
+  }
+}
+
+/* ---------- event wiring ---------- */
+presetRow.addEventListener('click', (e) => {
+  const pill = e.target.closest('.preset-pill');
+  if (!pill) return;
+  presetRow.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  state.preset = pill.dataset.preset;
+
+  if (state.preset === 'custom') {
+    startInput.closest('.fchip').querySelector('input').focus();
+    return; // wait for manual date entry
+  }
+  const range = presetRange(state.preset);
+  state.start = range.start;
+  state.end = range.end;
+  startInput.value = state.start;
+  endInput.value = state.end;
+  fetchData();
+});
+
+function markCustom(){
+  presetRow.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('active'));
+  presetRow.querySelector('[data-preset="custom"]').classList.add('active');
+  state.preset = 'custom';
+}
+
+startInput.addEventListener('change', () => {
+  state.start = startInput.value;
+  if (state.end < state.start) { state.end = state.start; endInput.value = state.end; }
+  markCustom();
+  fetchData();
+});
+endInput.addEventListener('change', () => {
+  state.end = endInput.value;
+  if (state.end < state.start) { state.start = state.end; startInput.value = state.start; }
+  markCustom();
+  fetchData();
+});
+platformSelect.addEventListener('change', () => {
+  state.platform = platformSelect.value;
+  fetchData();
+});
+
+/* ---------- init ---------- */
+fetchData();
+</script>
+</body>
+</html>
